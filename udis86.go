@@ -6,6 +6,7 @@ package udis86
 #cgo freebsd CFLAGS: -I/usr/local/include
 #cgo freebsd LDFLAGS: -L/usr/local/lib
 
+#include <stdlib.h>
 #include <udis86.h>
 
 // These wrappers are implemented in wrappers.c
@@ -85,7 +86,7 @@ type UDis86Operand struct {
 // The UDis86 struct contais all the information decoded from
 // the current instruction.
 type UDis86 struct {
-	ud       C.struct_ud
+	ud       *C.struct_ud
 	r        io.Reader
 	PC       uint64
 	Mnemonic int
@@ -103,19 +104,20 @@ type UDis86 struct {
 // NewUDis86 returns a new UDis86 object.
 func NewUDis86() *UDis86 {
 	d := new(UDis86)
-	C.ud_init(&d.ud)
+	d.ud = (*C.struct_ud)(C.malloc(C.sizeof_struct_ud))
+	C.ud_init(d.ud)
 	return d
 }
 
 // fillOperandData fills the UDis86 Operand field, i is the index
 // of the operand.
 func (d *UDis86) fillOperandData(i int) {
-	d.Operand[i].Type = int(d.ud.operand[i]._type)
-	d.Operand[i].Size = uint8(d.ud.operand[i].size)
-	d.Operand[i].Base = int(d.ud.operand[i].base)
-	d.Operand[i].Index = int(d.ud.operand[i].index)
-	d.Operand[i].Offset = uint8(d.ud.operand[i].offset)
-	d.Operand[i].Scale = uint8(d.ud.operand[i].scale)
+	d.Operand[i].Type = int((*(d.ud)).operand[i]._type)
+	d.Operand[i].Size = uint8((*(d.ud)).operand[i].size)
+	d.Operand[i].Base = int((*(d.ud)).operand[i].base)
+	d.Operand[i].Index = int((*(d.ud)).operand[i].index)
+	d.Operand[i].Offset = uint8((*(d.ud)).operand[i].offset)
+	d.Operand[i].Scale = uint8((*(d.ud)).operand[i].scale)
 	d.Operand[i].LVal.SByte = int8(C.ud_get_lval_sbyte(&d.ud.operand[i]))
 	d.Operand[i].LVal.UByte = uint8(C.ud_get_lval_ubyte(&d.ud.operand[i]))
 	d.Operand[i].LVal.SWord = int16(C.ud_get_lval_sword(&d.ud.operand[i]))
@@ -130,56 +132,60 @@ func (d *UDis86) fillOperandData(i int) {
 
 // fillInsnData fills the UDis86 object with the decoded data.
 func (d *UDis86) fillInsnData() {
-	d.PC = uint64(d.ud.pc)
-	d.Mnemonic = int(d.ud.mnemonic)
-	d.PfxRex = uint8(d.ud.pfx_rex)
-	d.PfxSeg = uint8(d.ud.pfx_seg)
-	d.PfxOpr = uint8(d.ud.pfx_opr)
-	d.PfxAdr = uint8(d.ud.pfx_adr)
-	d.PfxLock = uint8(d.ud.pfx_lock)
-	d.PfxRep = uint8(d.ud.pfx_rep)
-	d.PfxRepe = uint8(d.ud.pfx_repe)
-	d.PfxRepne = uint8(d.ud.pfx_repne)
+	d.PC = uint64((*(d.ud)).pc)
+	d.Mnemonic = int((*(d.ud)).mnemonic)
+	d.PfxRex = uint8((*(d.ud)).pfx_rex)
+	d.PfxSeg = uint8((*(d.ud)).pfx_seg)
+	d.PfxOpr = uint8((*(d.ud)).pfx_opr)
+	d.PfxAdr = uint8((*(d.ud)).pfx_adr)
+	d.PfxLock = uint8((*(d.ud)).pfx_lock)
+	d.PfxRep = uint8((*(d.ud)).pfx_rep)
+	d.PfxRepe = uint8((*(d.ud)).pfx_repe)
+	d.PfxRepne = uint8((*(d.ud)).pfx_repne)
 	for i := range d.Operand {
 		d.fillOperandData(i)
 	}
+}
+
+func (d *UDis86) Destroy() {
+	C.free(unsafe.Pointer(d.ud))
 }
 
 // Disassemble disassembles one instruction and returns the
 // number of bytes disassembled. A Zero means end of
 // disassembly.
 func (d *UDis86) Disassemble() uint {
-	r := uint(C.ud_disassemble(&d.ud))
+	r := uint(C.ud_disassemble(d.ud))
 	d.fillInsnData()
 	return r
 }
 
 // InputSkip skips n input bytes.
 func (d *UDis86) InputSkip(n uint) {
-	C.ud_input_skip(&d.ud, C.size_t(n))
+	C.ud_input_skip(d.ud, C.size_t(n))
 }
 
 // InsnAsm returns a string with the disassembled instruction.
 func (d *UDis86) InsnAsm() string {
-	return C.GoString(C.ud_insn_asm(&d.ud))
+	return C.GoString(C.ud_insn_asm(d.ud))
 }
 
 // InsnHex returns a string with the hex form of the
 // disassembled instruction.
 func (d *UDis86) InsnHex() string {
-	return C.GoString(C.ud_insn_hex(&d.ud))
+	return C.GoString(C.ud_insn_hex(d.ud))
 }
 
 // InsnLen returns the number of bytes disassembled.
 func (d *UDis86) InsnLen() uint {
-	return uint(C.ud_insn_len(&d.ud))
+	return uint(C.ud_insn_len(d.ud))
 }
 
 // InsnOff Returns the starting offset of the disassembled
 // instruction relative to the program counter value specified
 // initially.
 func (d *UDis86) InsnOff() uint64 {
-	return uint64(C.ud_insn_off(&d.ud))
+	return uint64(C.ud_insn_off(d.ud))
 }
 
 // goRead is called from ud_read_go_reader to read a single byte
@@ -198,35 +204,35 @@ func goRead(ptr unsafe.Pointer) int {
 // SetInputReader sets an io.Reader as input.
 func (d *UDis86) SetInputReader(r io.Reader) {
 	d.r = r
-	C.ud_set_input_reader(&d.ud, unsafe.Pointer(d))
+	C.ud_set_input_reader(d.ud, unsafe.Pointer(d))
 }
 
 // SetInputBuffer sets a byte slice as input.
 func (d *UDis86) SetInputBuffer(b []byte) {
-	C.ud_set_input_buffer(&d.ud, (*C.uint8_t)(&b[0]),
+	C.ud_set_input_buffer(d.ud, (*C.uint8_t)(&b[0]),
 		C.size_t(len(b)))
 }
 
 // SetMode sets disassembly mode. Valid values are 16, 32
 // and 64. By default, the library works in 32bit mode.
 func (d *UDis86) SetMode(m uint8) {
-	C.ud_set_mode(&d.ud, C.uint8_t(m))
+	C.ud_set_mode(d.ud, C.uint8_t(m))
 }
 
 // SetPC sets the program counter (EIP/RIP).
 func (d *UDis86) SetPC(pc uint64) {
-	C.ud_set_pc(&d.ud, C.uint64_t(pc))
+	C.ud_set_pc(d.ud, C.uint64_t(pc))
 }
 
 // SetSyntax sets the output syntax.
 func (d *UDis86) SetSyntax(s int) {
 	switch s {
 	case UD_SYN_NONE:
-		C.ud_set_syntax(&d.ud, nil)
+		C.ud_set_syntax(d.ud, nil)
 	case UD_SYN_INTEL:
-		C.ud_set_syntax_intel(&d.ud)
+		C.ud_set_syntax_intel(d.ud)
 	case UD_SYN_ATT:
-		C.ud_set_syntax_att(&d.ud)
+		C.ud_set_syntax_att(d.ud)
 	}
 }
 
@@ -237,8 +243,8 @@ func (d *UDis86) SetSyntax(s int) {
 func (d *UDis86) SetVendor(v int) {
 	switch v {
 	case UD_VENDOR_INTEL:
-		C.ud_set_vendor(&d.ud, C.UD_VENDOR_INTEL)
+		C.ud_set_vendor(d.ud, C.UD_VENDOR_INTEL)
 	case UD_VENDOR_AMD:
-		C.ud_set_vendor(&d.ud, C.UD_VENDOR_AMD)
+		C.ud_set_vendor(d.ud, C.UD_VENDOR_AMD)
 	}
 }
