@@ -2,7 +2,7 @@ package udis86_test
 
 import (
 	"fmt"
-	"github.com/jroimartin/udis86"
+	"github.com/koropets/udis86"
 	"os"
 )
 

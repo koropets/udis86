@@ -3,11 +3,11 @@ Go bindings for libudis86
 
 Installation
 ------------
-	go get github.com/jroimartin/udis86
+	go get github.com/koropets/udis86
 
 Documentation
 -------------
-	go doc github.com/jroimartin/udis86
+	go doc github.com/koropets/udis86
 
 libudis86 Installation
 ----------------------
